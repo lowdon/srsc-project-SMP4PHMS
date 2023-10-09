@@ -1,0 +1,23 @@
+TODO:
+
+Very simple example using Symmetric Encryption 
+using Stream-Oriented or Stream-Cipher algorithms.
+This is just to now how to use easily steram-oriented ciphers in 
+JAVA (JCE)
+
+Of course  there are many different stream-ciphers (algorithms).
+Some of them:
+
+RC4 (Sometimes appearing as ARC or ARCFOUR)
+CHACHA-20
+
+SALSA-20
+RABBIT
+A5 Family (A5/1, A5/2)
+A8
+VEST
+TRIVIUM
+
+================================
+MORE ... In next LECTURES !
+================================

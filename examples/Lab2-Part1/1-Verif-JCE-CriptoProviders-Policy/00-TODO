@@ -1,0 +1,84 @@
+For the examples (java code):
+Compile, run, and understand when running.
+
+For this purpose pay attention to the discussion and hands-on
+explanations in class.
+
+=====================================================================
+To follow and to understand in the Hands-On Lab:
+
+1)
+What is the purpose of ListAlgorithms.java ?
+- How many crypto algorithms you can use in your
+  Java installaton ?
+  obs) As you see, you have different algorithms:
+       - Symmetric Crypto ALgorithms
+       - Asymmetric Crypto Algorithms
+       - Algorithms and constructions for Digital Signatures
+       - Secure Hash Functions
+       - Algorithms and constructions for MACs 
+         (Message Authentication Codes) namely:
+	 * HMACs - Hash-Based MACs
+	 * CMACs - Cryptographic MACs
+
+        Try to identify the names of algorithms for each category
+	Remember the purpose of different algorithms.
+	A good exercise: try to map the categories and purpposes in the
+	referential of security properties, attaks and security mechanisms
+	using X.800 Framework concepts (Lectures/Theoretical Classes)
+
+2)
+What is the purpose of ListProviders.java ?
+Try and see to answer the following questions:
+- How many Java Cryptographic Providers do you have in your Java
+  Installation and Version ? 
+- What is a Java Cryptographic Provider 
+  in the JCA (Java Cryptographic Architecture) 
+  and JCE Support (Java Cryprographic Extensions)
+- How to install/use statically a JCE Cryprographic Provider
+  (only suggested for Java versions < 11)
+  (Ex., BouncyCastle Crypto Provider)
+
+3)
+What is the purpose of SimplePolicyTest ?
+What can you observe from running the code ?
+
+- Have you (policy) restrictions or not in using keysizes
+  when you use symmetric cryptography in your Java environment ?
+- How to manage such restrictions in your Java environment ?  
+  Try: if you find restrictions try to overcome such policy
+       restrictions.
+
+4)
+
+What is the purpose of SimpleProviderTest or TestePrecedencia classe?
+Compile and run the code and try to understand the results:
+
+- Can you modify the precedence order when using crypto algorithms
+  and their parameterizations when they are provided in different
+  installed crypto-providers ?
+- What to do if you want to use specifically use an algorithm from
+  a specific crypto-provider ?
+
+=====================================================================
+Identify your java installation: JDK, JRE, openjdk, versions, ...
+
+More references:
+Ex: for Java 8 from Oracle distribution:
+See for Java 8 (or find the equivalent docs for your Java version)
+https://docs.oracle.com/javase/8/docs/technotes/guides/security/
+https://docs.oracle.com/javase/8/docs/technotes/guides/security/overview/jsoverview.html
+https://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html
+
+Management of Cryptographic Jurisdiction Policy Files in Java (JCE):
+https://www.oracle.com/java/technologies/javase-jce8-downloads.html
+
+Management of Cryptographic providers for Java.
+(If you want to use crypto providers for Bouncy Castle)
+
+Bouncy Castle Cryptograhic Provider for Java
+https://www.bouncycastle.org/
+
+More recent versions:
+https://www.bouncycastle.org/latest_releases.html
+

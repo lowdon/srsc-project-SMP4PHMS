@@ -1,0 +1,67 @@
+TODO (try):
+
+you can use openssl (opwnssl tool - shell, command line) to
+make cruptographic operatins:
+
+Examples:
+
+1) How to hash an input messahe with SHA-512 ?
+(The same for any other hash function implemenetd in openssl)
+
+  $echo "message to be hashed ..." | openssl sha512
+
+2) How to hash a file ?
+(the same for any other hash fucntion implemenetd in openssl)
+  $openssl dgst -sha512 <inputfile> 
+    or simply
+  $openssl sha512 <inputfile>     
+  
+3) How to encrypt/decrypt a file with a certain symmetric algorithm 
+   and defined mode, using openssl ?
+   
+  $openssl aes-256-cbc -a -salt -in secrets.txt -out secrets.txt.enc 
+     or ...
+  $openssl aes-256-cbc -a -pbkdf2 -salt -in secrets.txt -out secrets.txt.enc 
+  
+   It will ask you for a "password" and will use the password as a
+   seed for the generation of the encryption key ...
+   
+  $openssl aes-256-cbc -d -a -in secrets.txt.enc -out secrets.txt.new
+  
+  or
+  
+  $openssl aes-256-cbc -d -a -pbkdf2 -in secrets.txt.enc -out secrets.txt.new
+  
+
+4) How to compare the performance in my computer of different
+   cryptographic algorithms/tools using openssl ?
+   
+   Try:
+   
+   $openssl speed     // you will have a nice quick benchmark ...
+   
+   or
+   
+   $openssl speed aes  // for a certain algorithm ... In this case AES
+   
+5) What can you say from your comparative performance observations
+   comparing hash functions with symmetric encryption ... ?
+   
+   And about comparisions of different symmetric algorithms ... ?
+   
+   And about comparision of difefrent symmetric algorithms ... ?
+   (example: AES versus BLOWFISH versus TripleDES versus DES)
+   
+   And about comparisons between certain hash functions with
+   certain symmetric algorithms ... 
+   (example: AES versus SHA-512 )
+   
+
+
+  ===========================
+  To know more ... do:
+  $man openssl
+  ===========================
+  
+  
+  

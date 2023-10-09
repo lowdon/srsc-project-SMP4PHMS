@@ -1,0 +1,78 @@
+Here you can observe how to use Secure Hash Functions
+to provide INTEGRITY guarantees.
+
+Follow the Lab
+
+====================================================================
+1. Analyze tthe code example: how to use Secure Hash Functions
+   and how Secure Hash Algorithms can be used to protect Data or
+   Messages INTEGRITY
+   See classes: TamperedExample.java 
+                and TamperedProtectionWithDigest.java
+
+2. Analyze now the class: TamperedEvenWithDigest.java
+
+What ? Uhm... Is it something not expected ? How is it possible ?
+
+=====================================================================
+
+You will discuss more in the tehretical classes the security proerties
+that you can expect from Secure Hash Functions.
+
+Some secure Hash Functions are the following. Each hash functions is
+characterized by the fixed number of bits returing as digests:
+
+MD5: 128 bits   .... Very weak now !
+MD6: (until 512 bits)
+SHA-1: 160 bits .... Considered weak now !
+
+TIGER: 192 bits
+
+BLAKE2: (until 512 bits)
+BLAKE3: 256 bits
+
+GOST: 256 bits
+
+WHIRLPOOL: 512 bits
+
+RIPEMD Family:
+RIPEMD-128: 128 bits
+RIPEMD-160: 160 bits
+RIPEMD-256: 256 bits
+RIPEMD-320: 320 bits
+
+SHA-2 Family;
+SHA-224: 224 bits
+SHA-256: 256 bits
+SHA-384: 384 bits
+SHA-512: 512 bits
+
+VSH: 1024 bits
+
+GROSTL
+(Param.): Arbitrary Digests, until 512 bits 
+
+SKEIN:
+(Param.): Arbitrary Digests, until 1024 bits
+
+JH Family
+JH-224: 224 bits
+JH-256: 256 bits
+JH-384: 384 bits
+JH-512: 512 bits
+
+BLAKE2 Family
+BLAKE-224: 224 bits
+BLAKE-256: 256 bits
+BLAKE-384: 384 bits
+BLAKE-512: 512 bits
+
+SHA-3 Family (or Keccak Family):
+SHA3-224: 224 bits
+SHA3-256: 256 bits
+SHA3-384: 384 bits
+SHA3-512: 512 bits
+
+======================================================
+More... in a next LECTURE on Secure Hashing!
+======================================================

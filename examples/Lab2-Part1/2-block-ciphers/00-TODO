@@ -1,0 +1,138 @@
+Analyze code examples.
+It is all about programming with Symmetric Cryptography,
+using Block-Oriented Algorithms (or Block Ciphers):
+
+Here you must learn about the use of MODES when using
+Symmetric Encryption and Block Ciphers.
+
+================================================================
+Follow the Lab:
+
+1) About Symmetric Crypto and Block-Based Encryption Algorithms
+   and the use of MODES (Parameterization of MODES)
+
+- How to use different modes when using Block based Symmetric Encryption ?
+- Try to observe some effects when you change the modes.
+  Hint: Observe the size of cipgertext compared with plaintext
+        What modes expanded the ciphertext ?
+	
+- Observe that only certain modes (ex., CBC, CBR, OFB, CFB, among
+  others) need to be used with a required parameterization of 
+  Initialization  Vectors ...
+  
+  See, for example, that when you use ECB mode you dont need the
+  IV - Initialization Vector. Why ?
+  
+- Why we must use different modes for different purposes ?
+  See the relevance of using different modes... and the
+  relevance of the use of different initialization vectors
+  when we don't change the key
+
+- Finally you can observe that:
+  *) You cannot use keys of any sizes for each symmetric algorithm:
+     Each symmetric algorithm has its own admissible key sizes:
+     Ex: AES: 128, 192 or 256 bit key
+         RC6: 128, 192 or 256 bit key
+	 TWOFISH: 128, 192, 256 bit key
+	 CAMELIA: 128, 192, 256 bit key 
+ 	 SERPENT: 128, 192, 256 bit key
+	 MARS:128, 192, 256 bit key
+	 IDEA: 128 bit key
+	 KASUMI: 128 bit key
+         SEED: 128 bit key	 
+	 SKIPJACK: 80 bit key
+	 CAST-128: 40, 128 bit key
+         Blowfish: 64, 126, 256, 448 bit keys
+	 DES: 56 (in fact only 56 bits used)
+	 TrileDES (or DESede): 112, 168 bit keys
+	 
+
+2) About Symmetric Crypto and the Relevance of PADDING parameterization
+
+- How to use different padding methods in Block-Oriented Ciphers?
+- Why we need Padding ? When we need padding ?
+- Is padding a relevant security association parameter ? Why ?
+- What is the relevance of using standardized padding methods ?
+- In our lab examples we are using standard PKCS5 padding ....
+  But there are other padding methods: PKCS7 (rfc5652), ZEROPadding, ANSIX9.23,   ISO/IEC 9797-1 (or rfc 1321), ISO 10126, ISO/IEC 7816-4
+
+Ok, you learned that you need padding, how, why and when...
+You also understood why padding must be provided when you
+want to encrypt input plaintext (messages, files ...) with
+sizes that are not multiple of the base blocksize processed by
+the desired crypto algorithm ... 
+So, in general ... you will tend to use always PADDING.
+
+You must take into account that:
+
+- Symmetric Block-Based Algorithms process Blocks
+- Each algorithm adopts a blocksize as characteristic (fixed)
+- So, consequently this also determines the sizes of Initialization
+  vectors, when using certain modes
+
+  Ex: 
+      DES, TripeDES, Blowfish, RC5, IDEA, 
+      KASUMI, SKIPJACK, CAST (among many others...) use 64 bit blocks
+
+      AES, RC6, Twofish, MARS, SERPENT, 
+      CAMELIA, SEED, (among others...) use 128 bit blocks
+
+
+Use of "so called" AEAD Modes
+------------------------------
+AEAD means: Authenticated Encryption with Associated Data
+These modes used for Symmetric Crypto and Block-Ciphers  are forms of
+encryption which simultaneously assure the confidentiality and authenticity
+of data.
+In the provided examples you have exercises using two AEAD modes:
+*) GCM (Galois Counter mode
+*) CCM (Counter with Cipher block chaining message authentication code Mode)
+Please see the Lectures for the theoretical considerations for thes modes
+
+Remember that AEAD modes are (in practical and generic terms), the more
+secure modes we can use for symmetric crypto constructions and use.
+For ex., TLS 1.3 (the more recent TLS version) only uses AEAD modes, to
+avoid vulerabilities of TLS in previous versions due to the use
+of Weak Ciphersuites (that must be considered as deprecated) or due to
+insecure ciphersuites' configurations ...
+Unfortunetly there are "looots" of Web-Applications, Rest/HTTPS based applications and services, or HTTPS Sites that have vulerabilities, beucause Sysadmins,
+Programmers, etc ... dont know about Crypto-Support behind HTTPS and TLS !!!!
+
+Use of GCM and CCM in practice:
+---------------------------------
+The practical advantages when using GCM or CCM are:
+- We dont need to include (explicitly) an integrity/authenticity check,
+  for ex., using additonal Secure Hash or MAC proofs ... Because 
+  message integrity/authenticity is "implicit" in the mode itself,
+  meaning that we have these proofs verified implicitly when decrypting
+- We dont need padding
+
+The concerns and important ussies for practical use are:
+- You must deal properly with initilization parameters
+  (IVs, Nonces) for encryption
+  IVs are in fact used as nonces .... We must use always a different
+  Nonce for each encryption (non-reusable Nonces for consecutive encryptions
+  when using the same Key.
+- There is expansion of sise of Ciphered data compared with Plaintext data
+  (Can observe this experimentally but try to understand why...)
+
+- Modes like GCM or CCM (more recently standardized) are not available
+  sometimes in certain cryptographic libraries (including crypto libraries
+  for Java and JCA/JCE support. You must have crypto libraries including
+  support for these modes: example last versions of the Bouncy Castle
+  Java crypto libraries will be ok to run the provided examples in
+  this Lab
+
+More about AEAD and CCM or GCM:
+- AEAD: https://en.wikipedia.org/wiki/Authenticated_encryption
+- CCM: https://en.wikipedia.org/wiki/CCM_mode
+- GCM: https://en.wikipedia.org/wiki/Galois/Counter_Mode
+
+=====================================================================
+... More about all and theoretical implications behind all the
+exemplified code and Lab-exercises: See the Lectures and provided
+materials (slides, biblio. Refs)
+=====================================================================
+
+
+
