@@ -6,32 +6,56 @@ import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Properties;
 
 // this class will hold all crypto algorithms able to be called
 public class MessageEncoder {
 
-    public static byte[] encrypt(String confidentiality, byte[] input){
-        switch (confidentiality){
+    //this will be the algorithm used for symmetric encryption. set it in the security.conf!!!
+    private String confidentiality;
+    private String cAlgorithm; //name of alg in confidentiality
+    private byte[] keyBytes;
+
+    public MessageEncoder(){
+        InputStream secConf;
+        secConf = getClass().getResourceAsStream("/security.conf");
+        Properties props = new Properties();
+        try {
+            props.load(secConf);
+        } catch (IOException e) {
+            throw new RuntimeException("No such file");
+        }
+        confidentiality = props.getProperty("CONFIDENTIALITY");
+        String confKeyS = props.getProperty("CONFIDENTIALITY-KEY");
+        System.out.println("THIS IS THE CONFIDENTIALITY IN SEC.CONF=== " + confidentiality
+            + "\nCONF-KEY=== " + confKeyS); //todo debug
+        keyBytes = confKeyS.getBytes();
+        cAlgorithm = confidentiality.split("/")[0];
+    }
+
+    public byte[] encrypt(byte[] input){
+        switch (this.confidentiality){
             case "AES/GCM/NoPadding":
-                return encryptMessageWithAES(input, "".getBytes());
+                return encryptMessageWithAES(input);
         }
 
         return "Not a known encryption algorithm".getBytes();
     }
 
-    public static byte[] decrypt(String confidentiality, DataInputStream istream) throws IOException {
-        switch (confidentiality){
+    public byte[] decrypt(DataInputStream istream) throws IOException {
+        switch (this.confidentiality){
             case "AES/GCM/NoPadding":
                 int ctLength = istream.readInt();
                 byte[] iv = istream.readNBytes(16);
                 byte[] mBytes = new byte[ctLength];
                 istream.readFully(mBytes);
-                return decryptMessageWithAES(ctLength, iv, mBytes, "".getBytes());
+                return decryptMessageWithAES(ctLength, iv, mBytes);
         }
 
         return "Not a known encryption algorithm".getBytes();
@@ -40,21 +64,15 @@ public class MessageEncoder {
     /**
      * Return encrypted message, in which the first 4 bytes is length of encrypted text
      * @param input
-     * @param keyBytes
      * @return
      */
-    private static byte[] encryptMessageWithAES(byte[] input, byte[] keyBytes) {
-
-        keyBytes = new byte[] { // TODO TEMPORARY!!! DELETE
-                0x01, 0x23, 0x45, 0x67, 0x09, 0x0a, 0x5c, (byte)0xef,
-                0x01, 0x23, 0x45, 0x67, (byte)0x89, 0x07, 0x0d, (byte)0xcf
-        };
+    private byte[] encryptMessageWithAES(byte[] input) {
 
         byte[] ivBytes = generateIv();
 
-        SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
+        SecretKeySpec key = new SecretKeySpec(this.keyBytes, cAlgorithm);
         GCMParameterSpec ivSpec = new GCMParameterSpec(128, ivBytes);
-        Cipher cipher = null;
+        Cipher cipher;
 
         try {
             cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -109,33 +127,24 @@ public class MessageEncoder {
         System.out.println("message with hash " + Arrays.hashCode(input) + " encrypted"); // TODO DEBUG
 
         return byteStream.toByteArray();
-        //return cipherText;  //todo if number of bytes is needed, use line above
     }
 
     /**
      * Returns decrypted message, in which first 4 bytes are lenght of message
      * @param message
-     * @param keyBytes
      * @return
      */
-    private static byte[] decryptMessageWithAES(int ctLength, byte[] ivBytes, byte[] message, byte[] keyBytes) {
+    private byte[] decryptMessageWithAES(int ctLength, byte[] ivBytes, byte[] message) {
 
-        keyBytes = new byte[]{ // TODO TEMPORARY!!! DELETE
-                0x01, 0x23, 0x45, 0x67, 0x09, 0x0a, 0x5c, (byte) 0xef,
-                0x01, 0x23, 0x45, 0x67, (byte) 0x89, 0x07, 0x0d, (byte) 0xcf
-        };
-
-
-        SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
-        //IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
-        Cipher cipher = null;
+        SecretKeySpec key = new SecretKeySpec(keyBytes, cAlgorithm);
+        Cipher cipher;
 
         // rebuild the plaintext with lenght
         ByteArrayOutputStream plainTextByteStream = new ByteArrayOutputStream();
         DataOutputStream plainTextDataStream = new DataOutputStream(plainTextByteStream);
 
         try {
-            cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher = Cipher.getInstance(confidentiality);
 
             System.out.println("ON DECRYPT: key   : " + Utils.toHex(keyBytes));
 

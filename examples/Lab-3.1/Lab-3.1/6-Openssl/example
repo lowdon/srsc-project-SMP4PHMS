@@ -1,0 +1,55 @@
+Another Openssl Example:
+------------------------
+
+Generate an RSA keypair with a 2048 bit private key
+----------------------------------------------------
+
+openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
+
+
+Extracting the public key from an RSA keypair
+to put the Public key in the public_key.pem 
+---------------------------------------------
+
+openssl rsa -pubout -in private_key.pem -out public_key.pem
+
+
+Now we can view the key elemnts in private_key.pem
+-------------------------------------------------
+
+openssl rsa -text -in private_key.pem
+
+All parts of private_key.pem are printed to the screen. This includes
+the modulus (also referred to as public key and n), public exponent
+(also referred to as e and exponent; default value is 0x010001),
+private exponent, and primes used to create keys (prime1, also called
+p, and prime2, also called q), a few other variables used to perform
+RSA operations faster, and the Base64 PEM encoded version of all that
+data.[6] (The Base64 PEM encoded version of all that data is identical
+to the private_key.pem file).
+
+
+We will now to create a public key certificate from
+the previous private_key_.pem
+---------------------------------------------------
+
+openssl req -new -x509 -key private_key.pem -out publickey.cer -days 365
+
+Note that we can see the certificate generated with openssl,
+using now the keytool:
+
+keytool -printcert publickey.cer
+
+// Note that the certificate is issued as a "self-signed certificate"
+// and it is represented in a PEM format...
+
+But you can convert the PEM certificate to be used in PKCS12 format
+-------------------------------------------------------------------
+
+openssl pkcs12 -export -in publickey.cer -inkey private_key.pem -out publickeycert.pkcs12
+
+and you can also see it as a java keystore storetype PKCS12
+------------------------------------------------------
+
+keytool -list -keystore publickeycert.pkcs12 -storetype pkcs12
+

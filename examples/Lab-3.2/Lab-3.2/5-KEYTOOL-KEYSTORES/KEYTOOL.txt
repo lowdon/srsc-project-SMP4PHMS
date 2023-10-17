@@ -1,0 +1,35 @@
+#Criar um par de chaves RSA de 2048 bits e guardar numa keystore na entry hj
+
+keytool -genkey -alias hj -keyalg RSA -keystore hj.jks -keysize 2048 -storepass hjhjhjhj
+
+
+#Gerar um certificado da chave publica a partir da anterior keystore 
+#e exporta-lo para um ficheiro hj.cer
+
+
+keytool -export -alias hj -keystore hj.jks -file hj.cer
+
+
+#Gerar um certificado a partir da anterior keystore e exporta-lo para
+um ficheiro hj.cer mas em formarto BASE64
+
+keytool -exportcert -alias hj -keystore hj.jks -file hjbase64.cer -rfc
+
+
+#Verificar o certificado hj.cer que tem a chave publica
+
+keytool -printcert -file hj.cer
+
+#Importar o certificado para uma trusted store
+
+keytool -import -file hj.cer -alias hj keystore trustedstore
+
+#Ver agora o conteudo da keystore trustedstore
+
+keytool -list -v -keystore trustedstore 
+
+# Ver os certificados root que estao na cacerts na instalacao da
+framework JAVA
+
+keytool -list -v -keystore /Library/Java/Home/lib/security/cacerts 
+

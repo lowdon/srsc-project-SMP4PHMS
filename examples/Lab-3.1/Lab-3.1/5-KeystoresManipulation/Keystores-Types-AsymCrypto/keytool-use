@@ -1,0 +1,11 @@
+keytool -genkeypair -keysize 2048 -keyalg RSA -alias hj -keystore ks.jks
+
+keytool -list -rfc -keystore ks.jks -alias hj 
+
+keytool -export -alias hj -keystore ks.jks -file hjpubkey.pem
+
+keytool -importkeystore -srckeystore ks.jks -destkeystore ks.pkcs12 -deststoretype pkcs12
+
+keytool -list -keystore ks.pkcs12 -storetype pkcs12
+
+keytool -export -alias hj -storetype pkcs12 -keystore ks.pkcs12 -file hjpubkeypkcs12.pem

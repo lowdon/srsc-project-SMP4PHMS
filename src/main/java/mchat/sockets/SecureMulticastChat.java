@@ -8,7 +8,6 @@ package mchat.sockets;// SecureMulticastChat.java
 // for her/him to cheat/fool the users
 
 import mchat.crypto.MessageEncoder;
-
 import java.io.*;
 import java.net.*;
 import java.util.Arrays;
@@ -45,6 +44,8 @@ public class SecureMulticastChat extends Thread {
     // Control  - execution thread 
 
     protected boolean isActive;
+
+    private MessageEncoder messageEncoder = new MessageEncoder();
 
     // Multicast Chat-Messaging
     public SecureMulticastChat(String username, InetAddress group, int port,
@@ -148,7 +149,7 @@ public class SecureMulticastChat extends Thread {
         dataStream.writeLong(CHAT_MAGIC_NUMBER);
         dataStream.writeInt(MESSAGE);
         dataStream.writeUTF(username);
-        dataStream.write(MessageEncoder.encrypt("AES/GCM/NoPadding", message.getBytes())); // todo message must be encrypted
+        dataStream.write(messageEncoder.encrypt(message.getBytes())); // todo message must be encrypted
         dataStream.close();
 
         byte[] data = byteStream.toByteArray(); // todo this must be the new SMP4PHMS datagram packet
@@ -164,7 +165,7 @@ public class SecureMulticastChat extends Thread {
                                   InetAddress address,
                                   int port) throws IOException {
         String username = istream.readUTF();
-        String message = new String(MessageEncoder.decrypt("AES/GCM/NoPadding", istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+        String message = new String(messageEncoder.decrypt(istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
 
         try {
             listener.chatMessageReceived(username, address, port, message);
