@@ -25,6 +25,9 @@ public class MessageEncoder {
     private String paddingType;
     private byte[] keyBytes;
     private MessageDigest hash;
+    private Mac hMac;
+    private String macAlgorithm;
+    boolean inHashMode;
 
     public MessageEncoder(){
         Security.addProvider(new BouncyCastleProvider());
@@ -54,24 +57,43 @@ public class MessageEncoder {
             throw new RuntimeException(e);
         }
 
-        try {
-            hash = MessageDigest.getInstance("SHA1", PROVIDER); // todo change to security.conf reading!!
-        } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
-            throw new RuntimeException(e);
+        //check if we are in hash mode or HMAC mode
+        String enableHMacS = props.getProperty("ENABLE_HMAC");
+        if(enableHMacS.equals("1"))
+            inHashMode = false;
+        else
+            inHashMode = true;
+
+        if(inHashMode) {
+            try {
+                hash = MessageDigest.getInstance(props.getProperty("HASH"), PROVIDER); // todo change to security.conf reading!!
+            } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            try {
+                macAlgorithm = props.getProperty("MACALGORITHM");
+                hMac = Mac.getInstance(macAlgorithm, PROVIDER);
+            } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
     public byte[] encrypt(byte[] input){
+        try {
 
-        byte[] encryption = new byte[0];
+            byte[] encryption = new byte[0];
 
-        //todo must implement verification for prefered hashmode
-        hash.update(input);
+            //todo must implement verification for prefered hashmode
+            if (inHashMode)
+                hash.update(input);
 
-        switch (this.cAlgorithm){
-            case "AES":
-                encryption = encryptMessageWithAES(input);
-                break;
+
+            switch (this.cAlgorithm) {
+                case "AES":
+                    encryption = encryptMessageWithAES(input);
+                    break;
 //            case "DES/CBC/PKCS5Padding":
 //                encryption = encryptMessageWithDES(input);
 //                break;
@@ -84,11 +106,15 @@ public class MessageEncoder {
 //            case "RC4":
 //                encryption = encryptMessageWithRC4(input);
 //                break;
-        }
+            }
 
-        if(encryption.length == 0)
-            return "Not a known encryption algorithm".getBytes();
-        return encryption;
+            if (encryption.length == 0)
+                return "Not a known encryption algorithm".getBytes();
+            return encryption;
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        return new byte[0];
     }
 
     /**
@@ -102,6 +128,11 @@ public class MessageEncoder {
         AlgorithmParameterSpec ivSpec = null;
         SecretKeySpec key = new SecretKeySpec(this.keyBytes, cAlgorithm);
         Cipher cipher;
+        Key hMacKey = null;
+
+        if(!inHashMode && !cMode.equals("GCM"))
+            hMacKey = new SecretKeySpec(key.getEncoded(), macAlgorithm);
+
         boolean needsIv = true;
 
         try {
@@ -149,13 +180,14 @@ public class MessageEncoder {
         }
 
         //todo example for hash. there will be then hmac mac hash
-        boolean inHashMode = true;
         byte[] cipherText = new byte[0];
 
         if(cMode.equals("GCM"))
             cipherText = new byte[cipher.getOutputSize(input.length)];
         else if(inHashMode) //here we increase the buffer size to hold the hash
             cipherText = new byte[cipher.getOutputSize(input.length + hash.getDigestLength() )];
+        else // hmac mode is enabled
+            cipherText = new byte[cipher.getOutputSize(input.length + hMac.getMacLength() )];
 
         int ctLength = 0;
         try {
@@ -166,12 +198,16 @@ public class MessageEncoder {
         try {
             if(cMode.equals("GCM")) //gcm does not need hash
                 ctLength += cipher.doFinal(cipherText, ctLength); // this is without hash in encrypted message
-            else {
+            else if (inHashMode){
                 ctLength += cipher.doFinal(hash.digest(), 0, hash.getDigestLength(), cipherText, ctLength);
-
-                System.out.println("message with hash " + hash.hashCode()); // todo debug
+                System.out.println("message with hash " + Utils.toHex(hash.digest())); // todo debug
+            } else{
+                hMac.init(hMacKey);
+                hMac.update(input);
+                ctLength += cipher.doFinal(hMac.doFinal(), 0, hMac.getMacLength(), cipherText, ctLength);
+                System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal())); // todo debug
             }
-        } catch (IllegalBlockSizeException | ShortBufferException | BadPaddingException e) {
+        } catch (IllegalBlockSizeException | ShortBufferException | BadPaddingException | InvalidKeyException e) {
             throw new RuntimeException(e);
         }
 
@@ -232,8 +268,6 @@ public class MessageEncoder {
                     ivSpec = new GCMParameterSpec(128, ivBytes);
                 else if(cMode.equals("CCM") || cMode.equals("CTR")){
                     ivSpec = new IvParameterSpec(ivBytes);
-                    //define hash for non auto-integrity algorithms
-                    //hash.update(ctBytes); //todo tenho de ver onde posso colocar isto sem muita repeticao de codigo...
                 }
                 decryption = decryptMessageWithAES(ctLength, ctBytes, ivSpec);
                 break;
@@ -278,6 +312,11 @@ public class MessageEncoder {
         SecretKeySpec key = new SecretKeySpec(keyBytes, cAlgorithm);
         Cipher cipher;
 
+        Key hMacKey = null;
+
+        if(!inHashMode && !cMode.equals("GCM"))
+            hMacKey = new SecretKeySpec(key.getEncoded(), macAlgorithm);
+
         // rebuild the plaintext with lenght
         ByteArrayOutputStream plainTextByteStream = new ByteArrayOutputStream();
         DataOutputStream plainTextDataStream = new DataOutputStream(plainTextByteStream);
@@ -309,22 +348,36 @@ public class MessageEncoder {
             //message integrity verification with hash, will not be used for GCM or other autheticated modes
             int messageLength = -1;
             if(!cMode.equals("GCM")){
-                messageLength = ptLength - hash.getDigestLength();
+                if(inHashMode) {
+                    messageLength = ptLength - hash.getDigestLength();
+                    hash.update(plainText, 0, messageLength);
 
-                hash.update(plainText, 0, messageLength);
+                    byte[] messageHash = new byte[hash.getDigestLength()];
+                    System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
 
-                byte[] messageHash = new byte[hash.getDigestLength()];
-                System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+                    //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
+                    System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
+                            MessageDigest.isEqual(hash.digest(), messageHash));
+                    System.out.println("message with hash " + Utils.toHex(hash.digest()));
+                } else { // HMAC mode is enabled
+                    messageLength = ptLength - hMac.getMacLength();
+                    hMac.init(hMacKey);
+                    hMac.update(plainText, 0, messageLength);
 
-                //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
-                System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
-                        MessageDigest.isEqual(hash.digest(), messageHash));
+                    byte[] messageHash = new byte[hMac.getMacLength()];
+                    System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+
+                    //THIS WILL PRINT IF HMAC MATCH OR NOT!!!
+                    System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nHMACverified: " +
+                            MessageDigest.isEqual(hMac.doFinal(), messageHash));
+                    System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal()));
+                }
 
                 byte[] messageText = new byte[messageLength];
                 System.arraycopy(plainText, 0, messageText, 0, messageLength); // copies messageText from plain to msgText
                 plainTextDataStream.write(messageText);
 
-                System.out.println("message with hash " + hash.hashCode());
+
             } else {
                 plainTextDataStream.write(plainText); // ciphertext afterwards
                 System.out.println("plain : " + Utils.toHex(plainText, ptLength) + " bytes: " + ptLength);
