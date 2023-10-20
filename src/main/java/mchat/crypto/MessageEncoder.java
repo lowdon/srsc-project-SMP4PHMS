@@ -18,6 +18,7 @@ import java.util.Properties;
 public class MessageEncoder {
 
     public static final String PROVIDER = "BC";
+    public static final int GCM_T_LEN = 128;
     //this will be the algorithm used for symmetric encryption. set it in the security.conf!!!
     private String confidentiality;
     private String cAlgorithm; //name of alg in confidentiality
@@ -140,7 +141,7 @@ public class MessageEncoder {
             switch (cMode) {
                 case "GCM":
                     ivBytes = generateIv(16);
-                    ivSpec = new GCMParameterSpec(128, ivBytes);
+                    ivSpec = new GCMParameterSpec(GCM_T_LEN, ivBytes);
                     break;
                 case "CTR":
                     ivBytes = generateIv(16);
@@ -199,8 +200,9 @@ public class MessageEncoder {
             if(cMode.equals("GCM")) //gcm does not need hash
                 ctLength += cipher.doFinal(cipherText, ctLength); // this is without hash in encrypted message
             else if (inHashMode){
-                ctLength += cipher.doFinal(hash.digest(), 0, hash.getDigestLength(), cipherText, ctLength);
-                System.out.println("message with hash " + Utils.toHex(hash.digest())); // todo debug
+                byte[] hashDigest = hash.digest();
+                ctLength += cipher.doFinal(hashDigest, 0, hash.getDigestLength(), cipherText, ctLength);
+                System.out.println("message with hash " + Utils.toHex(hashDigest)); // todo debug
             } else{
                 hMac.init(hMacKey);
                 hMac.update(input);
@@ -265,7 +267,7 @@ public class MessageEncoder {
                 //define alg param spec
                 AlgorithmParameterSpec ivSpec = null;
                 if(cMode.equals("GCM"))
-                    ivSpec = new GCMParameterSpec(128, ivBytes);
+                    ivSpec = new GCMParameterSpec(GCM_T_LEN, ivBytes);
                 else if(cMode.equals("CCM") || cMode.equals("CTR")){
                     ivSpec = new IvParameterSpec(ivBytes);
                 }
@@ -355,10 +357,12 @@ public class MessageEncoder {
                     byte[] messageHash = new byte[hash.getDigestLength()];
                     System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
 
+                    byte[] hashDigest = hash.digest();
                     //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
                     System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
-                            MessageDigest.isEqual(hash.digest(), messageHash));
-                    System.out.println("message with hash " + Utils.toHex(hash.digest()));
+                            MessageDigest.isEqual(hashDigest, messageHash));
+                    System.out.println("message with original hash: " + Utils.toHex(messageHash) +
+                            "\ncalculated hash after decryption: " + Utils.toHex(hashDigest));
                 } else { // HMAC mode is enabled
                     messageLength = ptLength - hMac.getMacLength();
                     hMac.init(hMacKey);
@@ -389,7 +393,8 @@ public class MessageEncoder {
 
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("DECRYPT FAIL - our decrypted message is: " + Arrays.toString(plainTextByteStream.toByteArray()));
+            System.out.println("DECRYPT FAIL - our decrypted message is: " +
+                    Arrays.toString(plainTextByteStream.toByteArray()));
         }
 
         return plainTextByteStream.toByteArray();
