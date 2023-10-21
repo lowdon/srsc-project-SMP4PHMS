@@ -19,6 +19,7 @@ public class MessageEncoder {
 
     public static final String PROVIDER = "BC";
     public static final int GCM_T_LEN = 128;
+    public final int VERSION;
     //this will be the algorithm used for symmetric encryption. set it in the security.conf!!!
     private String confidentiality;
     private String cAlgorithm; //name of alg in confidentiality
@@ -28,7 +29,8 @@ public class MessageEncoder {
     private MessageDigest hash;
     private Mac hMac;
     private String macAlgorithm;
-    boolean inHashMode;
+    private final boolean inHashMode;
+
 
     public MessageEncoder(){
         Security.addProvider(new BouncyCastleProvider());
@@ -79,6 +81,7 @@ public class MessageEncoder {
                 throw new RuntimeException(e);
             }
         }
+        VERSION = Integer.parseInt(props.getProperty("VERSION"));
     }
 
     public byte[] encrypt(byte[] input){
@@ -245,7 +248,17 @@ public class MessageEncoder {
 //    private byte[] encryptMessageWithDES(byte[] input) {
 //    }
 
-    public byte[] decrypt(DataInputStream istream) throws IOException {
+    public String decrypt(DataInputStream istream) throws IOException {
+        String message = null;
+
+        int msgVersion = istream.readInt() - '0';
+        System.out.println(" msgVersion: " + msgVersion +  " VERSION: " + VERSION);
+        if(msgVersion == VERSION){
+            message = new String(startDecrypt(istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+        }
+        return message;
+    }
+    public byte[] startDecrypt(DataInputStream istream) throws IOException {
 
         byte[] decryption = new byte[0];
 
@@ -404,6 +417,20 @@ public class MessageEncoder {
         byte[] iv = new byte[size];
         new SecureRandom().nextBytes(iv);
         return iv;
+    }
+
+    public boolean compareHashes(String username, byte[] h2){
+        try {
+            hash = MessageDigest.getInstance("SHA256", PROVIDER);
+        } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        }
+        hash.update(username.getBytes());
+        byte[] h1 = hash.digest();
+
+        if(Arrays.equals(h1, h2))
+            return true;
+        return false;
     }
 
 }

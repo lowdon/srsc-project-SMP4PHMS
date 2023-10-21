@@ -8,16 +8,18 @@ package mchat.sockets;// SecureMulticastChat.java
 // for her/him to cheat/fool the users
 
 import mchat.crypto.MessageEncoder;
+import mchat.headers.SMP4PHMSHeader;
+import mchat.utils.Utils;
+
 import java.io.*;
 import java.net.*;
-import java.util.Arrays;
 
 public class SecureMulticastChat extends Thread {
 
     // Definition of opcode for JOIN type
     public static final int JOIN = 1;
 
-    // Definition of opcode for LEAVE type    
+    // Definition of opcode for LEAVE type
     public static final int LEAVE = 2;
 
     // Definition of opcode for a regular message type (sent/received)
@@ -41,15 +43,15 @@ public class SecureMulticastChat extends Thread {
     // Listener for Multicast events that must be processed
     protected MulticastChatEventListener listener;
 
-    // Control  - execution thread 
+    // Control  - execution thread
 
     protected boolean isActive;
 
-    private MessageEncoder messageEncoder = new MessageEncoder();
+    private final MessageEncoder messageEncoder = new MessageEncoder();
 
     // Multicast Chat-Messaging
     public SecureMulticastChat(String username, InetAddress group, int port,
-                         int ttl, MulticastChatEventListener listener) throws IOException {
+                               int ttl, MulticastChatEventListener listener) throws IOException {
 
         this.username = username;
         this.group = group;
@@ -83,73 +85,51 @@ public class SecureMulticastChat extends Thread {
                 + message);
     }
 
-    // Send a JOIN message 
-    // 
+    // Send a JOIN message
+    //
     protected void sendJoin() throws IOException {
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        DataOutputStream dataStream = new DataOutputStream(byteStream);
-
-        dataStream.writeLong(CHAT_MAGIC_NUMBER);
-        dataStream.writeInt(JOIN);
-        dataStream.writeUTF(username);
-        dataStream.close();
-
-        byte[] data = byteStream.toByteArray(); // todo this must be the new SMP4PHMS datagram packet
-        DatagramPacket packet = new DatagramPacket(data, data.length, group,
-                msocket.getLocalPort());
-        msocket.send(packet);
+        sendJoinOrLeave(JOIN);
     }
 
     // Process recived JOIN message
-    // 
+    //
     protected void processJoin(DataInputStream istream, InetAddress address,
                                int port) throws IOException {
-        String name = istream.readUTF();
+        int hashLen = istream.readInt();
+        String userHash = Utils.toHex(istream.readNBytes(hashLen));
 
         try {
-            listener.chatParticipantJoined(name, address, port);
+            listener.chatParticipantJoined(userHash, address, port);
         } catch (Throwable e) {}
     }
 
-    // Send LEAVE 
+    // Send LEAVE
     protected void sendLeave() throws IOException {
-
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        DataOutputStream dataStream = new DataOutputStream(byteStream);
-
-        dataStream.writeLong(CHAT_MAGIC_NUMBER);
-        dataStream.writeInt(LEAVE);
-        dataStream.writeUTF(username);
-        dataStream.close();
-
-        byte[] data = byteStream.toByteArray(); // todo this must be the new SMP4PHMS datagram packet
-        DatagramPacket packet = new DatagramPacket(data, data.length, group,
-                msocket.getLocalPort());
-        msocket.send(packet);
+        sendJoinOrLeave(LEAVE);
     }
 
     // Processes a multicast chat LEAVE and notifies listeners
 
     protected void processLeave(DataInputStream istream, InetAddress address,
                                 int port) throws IOException {
-        String username = istream.readUTF();
+        int hashLen = istream.readInt();
+        String userHash = Utils.toHex(istream.readNBytes(hashLen));
 
         try {
-            listener.chatParticipantLeft(username, address, port);
+            listener.chatParticipantLeft(userHash, address, port);
         } catch (Throwable e) {}
     }
 
     // Send message to the chat-messaging room
-    // 
+    //
     public void sendMessage(String message) throws IOException {
 
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         DataOutputStream dataStream = new DataOutputStream(byteStream);
 
-        dataStream.writeLong(CHAT_MAGIC_NUMBER);
-        dataStream.writeInt(MESSAGE);
-        dataStream.writeUTF(username);
-        dataStream.write(messageEncoder.encrypt(message.getBytes())); // todo message must be encrypted
+        SMP4PHMSHeader header = new SMP4PHMSHeader(username, MESSAGE, CHAT_MAGIC_NUMBER);
+        dataStream.write(header.getHeaderBytes()); //add header
+        dataStream.write(messageEncoder.encrypt(message.getBytes())); // encrypt and add the payload with mac/hash
         dataStream.close();
 
         byte[] data = byteStream.toByteArray(); // todo this must be the new SMP4PHMS datagram packet
@@ -160,22 +140,36 @@ public class SecureMulticastChat extends Thread {
 
 
     // Process a received message  //
-    // 
+    //
     protected void processMessage(DataInputStream istream,
                                   InetAddress address,
                                   int port) throws IOException {
-        String username = istream.readUTF();
-        String message = new String(messageEncoder.decrypt(istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+        //String username = istream.readUTF();
+        int hashLen = istream.readInt();
+        String userHash = Utils.toHex(istream.readNBytes(hashLen));
+        String message = messageEncoder.decrypt(istream); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+        listener.chatMessageReceived(userHash, address, port, message);
 
-        try {
-            listener.chatMessageReceived(username, address, port, message);
-        } catch (Throwable e) {}
+    }
+
+    private void sendJoinOrLeave(int opCode) throws IOException {
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        DataOutputStream dataStream = new DataOutputStream(byteStream);
+
+        SMP4PHMSHeader header = new SMP4PHMSHeader(username, opCode, CHAT_MAGIC_NUMBER);
+        dataStream.write(header.getHeaderBytes()); //add header
+        dataStream.close();
+
+        byte[] data = byteStream.toByteArray(); // todo this must be the new SMP4PHMS datagram packet
+        DatagramPacket packet = new DatagramPacket(data, data.length, group,
+                msocket.getLocalPort());
+        msocket.send(packet);
     }
 
     // Loop:
     // reception and demux received datagrams to process,
     // according with message types and opcodes
-    // 
+    //
     public void run() {
         byte[] buffer = new byte[65508];
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -195,7 +189,7 @@ public class SecureMulticastChat extends Thread {
 
                 long magic = istream.readLong();
 
-                // Only accepts CHAT-MAGIC-NUMBER of the Chat 
+                // Only accepts CHAT-MAGIC-NUMBER of the Chat
                 if (magic != CHAT_MAGIC_NUMBER) {
                     continue;
 
@@ -221,7 +215,7 @@ public class SecureMulticastChat extends Thread {
             } catch (InterruptedIOException e) {
 
                 /**
-                 * Handler for Interruptions ... 
+                 * Handler for Interruptions ...
                  * WILL DO NOTHING ,,,
                  * Used for debugging / control if wanted ... to notify the loop interruption
                  */
