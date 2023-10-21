@@ -124,7 +124,6 @@ public class SecureMulticastChat extends Thread {
     // Send message to the chat-messaging room
     //
     public void sendMessage(String message) throws IOException {
-
         SMP4PHMSPacket sPacket = new SMP4PHMSPacket(
                 new SMP4PHMSHeader(username, MESSAGE, CHAT_MAGIC_NUMBER).getHeaderBytes(),
                 messageEncoder.encrypt(message.getBytes()));
@@ -146,7 +145,6 @@ public class SecureMulticastChat extends Thread {
     }
 
     private void sendJoinOrLeave(int opCode) throws IOException {
-
         SMP4PHMSHeader header = new SMP4PHMSHeader(username, opCode, CHAT_MAGIC_NUMBER);
         DatagramPacket packet = new DatagramPacket(header.getHeaderBytes(), header.getHeaderBytes().length, group,
                 msocket.getLocalPort());
