@@ -256,7 +256,6 @@ public class MessageEncoder {
 //    private byte[] encryptMessageWithRC4(byte[] input) {
 //    }
 //
-//
 //    private byte[] encryptMessageWithRC6(byte[] input) {
 //    }
 //
