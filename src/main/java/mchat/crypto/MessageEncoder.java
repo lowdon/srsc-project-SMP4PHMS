@@ -4,6 +4,7 @@ import mchat.utils.Utils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.*;
+import javax.crypto.spec.ChaCha20ParameterSpec;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -50,14 +51,15 @@ public class MessageEncoder {
         keyBytes = confKeyS.getBytes();
 
         String[] confParts = confidentiality.split("/");
-        try { //verify integrity of conf file
-            if (confParts.length != 3)
-                throw new InvalidPropertiesFormatException("Invalid conf file setup");
-            cAlgorithm = confParts[0];
+        //verify integrity of conf file
+        cAlgorithm = confParts[0];
+        if (confParts.length == 3) {
             cMode = confParts[1];
             paddingType = confParts[2];
-        } catch (InvalidPropertiesFormatException e){
-            throw new RuntimeException(e);
+        }
+        else {
+            cMode = "";
+            paddingType = "";
         }
 
         //check if we are in hash mode or HMAC mode
@@ -85,6 +87,13 @@ public class MessageEncoder {
     }
 
     public byte[] encrypt(byte[] input){
+        //debug
+        System.out.println("Encrypt::: key   : " + Utils.toHex(keyBytes));
+
+        System.out.println();
+        System.out.println("input : " + Utils.toHex(input));
+        //end debug
+
         try {
 
             byte[] encryption = new byte[0];
@@ -93,19 +102,18 @@ public class MessageEncoder {
             if (inHashMode)
                 hash.update(input);
 
-
             switch (this.cAlgorithm) {
                 case "AES":
                     encryption = encryptMessageWithAES(input);
+                    break;
+                case "ChaCha20":
+                    encryption = encryptMessageWithChaCha20(input);
                     break;
 //            case "DES/CBC/PKCS5Padding":
 //                encryption = encryptMessageWithDES(input);
 //                break;
 //            case "RC6/CBC/PKCS5Padding":
 //                encryption = encryptMessageWithRC6(input);
-//                break;
-//            case "ChaCha20":
-//                encryption = encryptMessageWithChaCha20(input);
 //                break;
 //            case "RC4":
 //                encryption = encryptMessageWithRC4(input);
@@ -114,11 +122,15 @@ public class MessageEncoder {
 
             if (encryption.length == 0)
                 return "Not a known encryption algorithm".getBytes();
+            else
+                System.out.println("encrypted successfully ---"); // TODO DEBUG
+
             return encryption;
-        }catch (Exception e){
-            e.printStackTrace();
         }
-        return new byte[0];
+        catch (Exception e){
+            e.printStackTrace();
+            throw new RuntimeException("ENCRYPT FAIL: " + e.getMessage());
+        }
     }
 
     /**
@@ -126,7 +138,10 @@ public class MessageEncoder {
      * @param input
      * @return
      */
-    private byte[] encryptMessageWithAES(byte[] input) {
+    private byte[] encryptMessageWithAES(byte[] input) throws IOException,
+            ShortBufferException, IllegalBlockSizeException, BadPaddingException,
+            InvalidKeyException, InvalidAlgorithmParameterException, NoSuchAlgorithmException,
+            NoSuchPaddingException, NoSuchProviderException {
 
         byte[] ivBytes = new byte[0];
         AlgorithmParameterSpec ivSpec = null;
@@ -139,52 +154,34 @@ public class MessageEncoder {
 
         boolean needsIv = true;
 
-        try {
-            cipher = Cipher.getInstance(confidentiality, PROVIDER);
-            switch (cMode) {
-                case "GCM":
-                    ivBytes = generateIv(16);
-                    ivSpec = new GCMParameterSpec(GCM_T_LEN, ivBytes);
-                    break;
-                case "CTR":
-                    ivBytes = generateIv(16);
-                    ivSpec = new IvParameterSpec(ivBytes);
-                    break;
-                case "CCM":
-                    ivBytes = generateIv(13);
-                    ivSpec = new IvParameterSpec(ivBytes);
-                    break;
-                case "ECB":
-                    needsIv = false;
-                    break;
-                default:
-                    throw new NoSuchAlgorithmException();
-            }
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e){
-            throw new RuntimeException(e.getMessage());
-        } catch (NoSuchProviderException e) {
-            throw new RuntimeException(e);
+        cipher = Cipher.getInstance(confidentiality, PROVIDER);
+        switch (cMode) {
+            case "GCM":
+                ivBytes = generateIv(16);
+                ivSpec = new GCMParameterSpec(GCM_T_LEN, ivBytes);
+                break;
+            case "CTR":
+                ivBytes = generateIv(16);
+                ivSpec = new IvParameterSpec(ivBytes);
+                break;
+            case "CCM":
+                ivBytes = generateIv(13);
+                ivSpec = new IvParameterSpec(ivBytes);
+                break;
+            case "ECB":
+                needsIv = false;
+                break;
+            default:
+                throw new NoSuchAlgorithmException();
         }
-
-        System.out.println("key   : " + Utils.toHex(keyBytes));
-
-        System.out.println();
-        System.out.println("input : " + Utils.toHex(input));
 
         // Cifrar
-        try {
-            if(needsIv)
-                cipher.init(Cipher.ENCRYPT_MODE, key, ivSpec);
-            else // ecb mode
-                cipher.init(Cipher.ENCRYPT_MODE, key);
-        } catch (InvalidKeyException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidAlgorithmParameterException e) {
-            throw new RuntimeException(e + " PROBLEM IN THE ENCRYPTION");
-        }
+        if(needsIv)
+            cipher.init(Cipher.ENCRYPT_MODE, key, ivSpec);
+        else // ecb mode
+            cipher.init(Cipher.ENCRYPT_MODE, key);
 
-        //todo example for hash. there will be then hmac mac hash
-        byte[] cipherText = new byte[0];
+        byte[] cipherText;
 
         if(cMode.equals("GCM"))
             cipherText = new byte[cipher.getOutputSize(input.length)];
@@ -193,27 +190,19 @@ public class MessageEncoder {
         else // hmac mode is enabled
             cipherText = new byte[cipher.getOutputSize(input.length + hMac.getMacLength() )];
 
-        int ctLength = 0;
-        try {
-            ctLength = cipher.update(input, 0, input.length, cipherText, 0);
-        } catch (ShortBufferException e) {
-            throw new RuntimeException(e);
-        }
-        try {
-            if(cMode.equals("GCM")) //gcm does not need hash
-                ctLength += cipher.doFinal(cipherText, ctLength); // this is without hash in encrypted message
-            else if (inHashMode){
-                byte[] hashDigest = hash.digest();
-                ctLength += cipher.doFinal(hashDigest, 0, hash.getDigestLength(), cipherText, ctLength);
-                System.out.println("message with hash " + Utils.toHex(hashDigest)); // todo debug
-            } else{
-                hMac.init(hMacKey);
-                hMac.update(input);
-                ctLength += cipher.doFinal(hMac.doFinal(), 0, hMac.getMacLength(), cipherText, ctLength);
-                System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal())); // todo debug
-            }
-        } catch (IllegalBlockSizeException | ShortBufferException | BadPaddingException | InvalidKeyException e) {
-            throw new RuntimeException(e);
+        int ctLength = cipher.update(input, 0, input.length, cipherText, 0);
+
+        if(cMode.equals("GCM") || cMode.equals("CCM") ||cMode.equals("OCB") ) //does not need hash
+            ctLength += cipher.doFinal(cipherText, ctLength); // this is without hash in encrypted message
+        else if (inHashMode){
+            byte[] hashDigest = hash.digest();
+            ctLength += cipher.doFinal(hashDigest, 0, hash.getDigestLength(), cipherText, ctLength);
+            System.out.println("message with hash " + Utils.toHex(hashDigest)); // todo debug
+        } else{
+            hMac.init(hMacKey);
+            hMac.update(input);
+            ctLength += cipher.doFinal(hMac.doFinal(), 0, hMac.getMacLength(), cipherText, ctLength);
+            System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal())); // todo debug
         }
 
         System.out.println("cipher: " + Utils.toHex(cipherText, ctLength) + " bytes: " + ctLength);
@@ -221,17 +210,45 @@ public class MessageEncoder {
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         DataOutputStream dataStream = new DataOutputStream(byteStream);
 
-        try {
-            dataStream.writeInt(ctLength); // int value in first pos
-            dataStream.write(cipherText); // ciphertext afterwards
-            if(needsIv)
-                dataStream.write(ivBytes); // 16 bytes for gcm or ctr and 13 bytes for ccm's IV
-            dataStream.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e.getMessage()  + " PROBLEM IN THE ENCRYPTION IO EXEPT");
-        }
+        dataStream.writeInt(ctLength); // int value in first pos
+        dataStream.write(cipherText); // ciphertext afterwards
+        if(needsIv)
+            dataStream.write(ivBytes); // 16 bytes for gcm or ctr and 13 bytes for ccm's IV
+        dataStream.close();
 
-        System.out.println("encrypted successfully ---"); // TODO DEBUG
+        return byteStream.toByteArray();
+    }
+
+    private byte[] encryptMessageWithChaCha20(byte[] input) throws InvalidAlgorithmParameterException,
+            InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException, IllegalBlockSizeException,
+            BadPaddingException, IOException {
+        byte[] ivBytes = generateIv(12);
+        int counter = SecureRandom.getInstanceStrong().nextInt();
+        SecretKeySpec key = new SecretKeySpec(this.keyBytes, cAlgorithm);
+        Cipher cipher = Cipher.getInstance(cAlgorithm);
+
+        // Create ChaCha20ParameterSpec
+        ChaCha20ParameterSpec paramSpec = new ChaCha20ParameterSpec(ivBytes, counter);
+
+        // Create SecretKeySpec
+        SecretKeySpec keySpec = new SecretKeySpec(key.getEncoded(), "ChaCha20");
+
+        // Initialize Cipher for ENCRYPT_MODE
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, paramSpec);
+
+        // Perform Encryption
+        byte[] cipherText = cipher.doFinal(input);
+
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        DataOutputStream dataStream = new DataOutputStream(byteStream);
+
+        dataStream.writeInt(cipherText.length); // int value in first pos
+        dataStream.write(cipherText); // ciphertext afterwards
+        dataStream.write(ivBytes);
+        dataStream.writeInt(counter);
+        dataStream.close();
+
+        System.out.println("cipher: " + Utils.toHex(cipherText, cipherText.length) + " bytes: " + cipherText.length);//debug
 
         return byteStream.toByteArray();
     }
@@ -239,8 +256,6 @@ public class MessageEncoder {
 //    private byte[] encryptMessageWithRC4(byte[] input) {
 //    }
 //
-//    private byte[] encryptMessageWithChaCha20(byte[] input) {
-//    }
 //
 //    private byte[] encryptMessageWithRC6(byte[] input) {
 //    }
@@ -251,24 +266,36 @@ public class MessageEncoder {
     public String decrypt(DataInputStream istream) throws IOException {
         String message = null;
 
-        int msgVersion = istream.readInt() - '0';
-        System.out.println(" msgVersion: " + msgVersion +  " VERSION: " + VERSION);
-        if(msgVersion == VERSION){
-            message = new String(startDecrypt(istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+        try{
+            int msgVersion = istream.readInt() - '0';
+            System.out.println("receivedMsgVersion: " + msgVersion +  " confVERSION: " + VERSION);
+            if(msgVersion == VERSION){
+                message = new String(startDecrypt(istream)); // TODO here istream.readUTF should be encapsulated by some decrypt() function
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+            throw new RuntimeException("DECRYPT FAIL: " + e.getMessage());
         }
+
         return message;
     }
-    public byte[] startDecrypt(DataInputStream istream) throws IOException {
+    private byte[] startDecrypt(DataInputStream istream) throws IOException,
+            InvalidAlgorithmParameterException, ShortBufferException,
+            NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException,
+            BadPaddingException, NoSuchProviderException, InvalidKeyException {
 
         byte[] decryption = new byte[0];
+        byte[] ctBytes = new byte[0];
+        byte[] ivBytes;
+
+        System.out.println("\nDecrypt::: key   : " + Utils.toHex(keyBytes));
+        System.out.println();
 
         switch (this.cAlgorithm){
             case "AES":
-                int ctLength = istream.readInt();
-                byte[] ctBytes = istream.readNBytes(ctLength);
+                ctBytes = istream.readNBytes(istream.readInt());
 
                 //define iv based on mode
-                byte[] ivBytes;
                 if(cMode.equals("CCM")) {
                     ivBytes = new byte[13];
                 } else { // we are in gcm or ctr mode
@@ -284,45 +311,71 @@ public class MessageEncoder {
                 else if(cMode.equals("CCM") || cMode.equals("CTR")){
                     ivSpec = new IvParameterSpec(ivBytes);
                 }
-                decryption = decryptMessageWithAES(ctLength, ctBytes, ivSpec);
+                decryption = decryptMessageWithAES(ctBytes.length, ctBytes, ivSpec);
                 break;
+            case "ChaCha20":
+                ctBytes = istream.readNBytes(istream.readInt()); // ciphertext afterwards
+                ChaCha20ParameterSpec chaSpec = new ChaCha20ParameterSpec(istream.readNBytes(12),
+                        istream.readInt());
+                decryption = decryptMessageWithChaCha20(ctBytes, chaSpec);
+                break;
+
 //            case "DES/CBC/PKCS5Padding":
 //                decryption = decryptMessageWithDES(input);
 //                break;
 //            case "RC6/CBC/PKCS5Padding":
 //                decryption = decryptMessageWithRC6(input);
 //                break;
-//            case "ChaCha20":
-//                decryption = decryptMessageWithChaCha20(input);
-//                break;
 //            case "RC4":
 //                decryption = decryptMessageWithRC4(input);
 //                break;
         }
 
+        
+        System.out.println("cipher : " + Utils.toHex(ctBytes));
+        System.out.println("plain : " + Utils.toHex(decryption));
+
         if(decryption.length == 0)
             return "Not a known encryption algorithm".getBytes();
+        else
+            System.out.println("decrypted successfully ---");
+
         return decryption;
     }
 
-//    private byte[] decryptMessageWithRC4(byte[] input) {
-//    }
-//
-//    private byte[] decryptMessageWithChaCha20(byte[] input) {
-//    }
-//
-//    private byte[] decryptMessageWithRC6(byte[] input) {
-//    }
-//
-//    private byte[] decryptMessageWithDES(byte[] input) {
-//    }
+    /**
+     * Decryption with ChaCha20 stream cipher
+     * @param cipherText
+     * @param chaSpec
+     * @return
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchPaddingException
+     * @throws InvalidAlgorithmParameterException
+     * @throws InvalidKeyException
+     * @throws IllegalBlockSizeException
+     * @throws BadPaddingException
+     * @throws IOException
+     */
+    private byte[] decryptMessageWithChaCha20(byte[] cipherText, AlgorithmParameterSpec chaSpec)
+            throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidAlgorithmParameterException,
+            InvalidKeyException, IllegalBlockSizeException, BadPaddingException, IOException {
+
+        Cipher cipher = Cipher.getInstance(confidentiality);
+        SecretKeySpec keySpec = new SecretKeySpec(this.keyBytes, cAlgorithm);
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, chaSpec);
+
+        return cipher.doFinal(cipherText);
+    }
 
     /**
      * Returns decrypted message, in which first 4 bytes are lenght of message
      * @param cipherText
      * @return
      */
-    private byte[] decryptMessageWithAES(int ctLength, byte[] cipherText, AlgorithmParameterSpec ivSpec) {
+    private byte[] decryptMessageWithAES(int ctLength, byte[] cipherText, AlgorithmParameterSpec ivSpec)
+            throws ShortBufferException, NoSuchPaddingException, NoSuchAlgorithmException,
+            NoSuchProviderException, IllegalBlockSizeException, BadPaddingException,
+            InvalidKeyException, IOException, InvalidAlgorithmParameterException {
 
         SecretKeySpec key = new SecretKeySpec(keyBytes, cAlgorithm);
         Cipher cipher;
@@ -336,82 +389,78 @@ public class MessageEncoder {
         ByteArrayOutputStream plainTextByteStream = new ByteArrayOutputStream();
         DataOutputStream plainTextDataStream = new DataOutputStream(plainTextByteStream);
 
-        try {
-            cipher = Cipher.getInstance(confidentiality, PROVIDER);
-
-            System.out.println("\nON DECRYPT: key   : " + Utils.toHex(keyBytes));
-
-            System.out.println();
-            System.out.println("input : " + Utils.toHex(cipherText));
-
-            // Decifrar
-
-            if (ctLength == -1)
-                throw new ShortBufferException("Invalid ct length");
-
-            if(ivSpec == null) // ecb mode
-                cipher.init(Cipher.DECRYPT_MODE, key); // needs 18byte key
-            else
-                cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
-
-            byte[] plainText = new byte[cipher.getOutputSize(ctLength)];
-            int ptLength = 0;
-
-            ptLength = cipher.update(cipherText, 0, ctLength, plainText, 0);
-            ptLength += cipher.doFinal(plainText, ptLength);
-
-            //message integrity verification with hash, will not be used for GCM or other autheticated modes
-            int messageLength = -1;
-            if(!cMode.equals("GCM")){
-                if(inHashMode) {
-                    messageLength = ptLength - hash.getDigestLength();
-                    hash.update(plainText, 0, messageLength);
-
-                    byte[] messageHash = new byte[hash.getDigestLength()];
-                    System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
-
-                    byte[] hashDigest = hash.digest();
-                    //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
-                    System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
-                            MessageDigest.isEqual(hashDigest, messageHash));
-                    System.out.println("message with original hash: " + Utils.toHex(messageHash) +
-                            "\ncalculated hash after decryption: " + Utils.toHex(hashDigest));
-                } else { // HMAC mode is enabled
-                    messageLength = ptLength - hMac.getMacLength();
-                    hMac.init(hMacKey);
-                    hMac.update(plainText, 0, messageLength);
-
-                    byte[] messageHash = new byte[hMac.getMacLength()];
-                    System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
-
-                    //THIS WILL PRINT IF HMAC MATCH OR NOT!!!
-                    System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nHMACverified: " +
-                            MessageDigest.isEqual(hMac.doFinal(), messageHash));
-                    System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal()));
-                }
-
-                byte[] messageText = new byte[messageLength];
-                System.arraycopy(plainText, 0, messageText, 0, messageLength); // copies messageText from plain to msgText
-                plainTextDataStream.write(messageText);
+        cipher = Cipher.getInstance(confidentiality, PROVIDER);
 
 
-            } else {
-                plainTextDataStream.write(plainText); // ciphertext afterwards
-                System.out.println("plain : " + Utils.toHex(plainText, ptLength) + " bytes: " + ptLength);
+
+        // Decifrar
+
+        if (ctLength == -1)
+            throw new ShortBufferException("Invalid ct length");
+
+        if(ivSpec == null) // ecb mode
+            cipher.init(Cipher.DECRYPT_MODE, key); // needs 18byte key
+        else
+            cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
+
+        byte[] plainText = new byte[cipher.getOutputSize(ctLength)];
+        int ptLength = 0;
+
+        ptLength = cipher.update(cipherText, 0, ctLength, plainText, 0);
+        ptLength += cipher.doFinal(plainText, ptLength);
+
+        //message integrity verification with hash, will not be used for GCM or other autheticated modes
+        int messageLength = -1;
+        if( !cMode.equals("GCM") && !cMode.equals("CCM") && !cMode.equals("OCB") ){
+            if(inHashMode) {
+                messageLength = ptLength - hash.getDigestLength();
+                hash.update(plainText, 0, messageLength);
+
+                byte[] messageHash = new byte[hash.getDigestLength()];
+                System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+
+                byte[] hashDigest = hash.digest();
+                //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
+                System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
+                        MessageDigest.isEqual(hashDigest, messageHash));
+                System.out.println("message with original hash: " + Utils.toHex(messageHash) +
+                        "\ncalculated hash after decryption: " + Utils.toHex(hashDigest));
+            } else { // HMAC mode is enabled
+                messageLength = ptLength - hMac.getMacLength();
+                hMac.init(hMacKey);
+                hMac.update(plainText, 0, messageLength);
+
+                byte[] messageHash = new byte[hMac.getMacLength()];
+                System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+
+                //THIS WILL PRINT IF HMAC MATCH OR NOT!!!
+                System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nHMACverified: " +
+                        MessageDigest.isEqual(hMac.doFinal(), messageHash));
+                System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal()));
             }
-            plainTextDataStream.close();
 
-            //output
-            System.out.println("decrypted successfully ---");
+            byte[] messageText = new byte[messageLength];
+            System.arraycopy(plainText, 0, messageText, 0, messageLength); // copies messageText from plain to msgText
+            plainTextDataStream.write(messageText);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("DECRYPT FAIL - our decrypted message is: " +
-                    Arrays.toString(plainTextByteStream.toByteArray()));
+
+        } else {
+            plainTextDataStream.write(plainText); // ciphertext afterwards
+            System.out.println("plain : " + Utils.toHex(plainText, ptLength) + " bytes: " + ptLength);
         }
+        plainTextDataStream.close();
 
         return plainTextByteStream.toByteArray();
     }
+//
+//    private byte[] decryptMessageWithRC4(byte[] input) {
+//    }
+//
+//    private byte[] decryptMessageWithRC6(byte[] input) {
+//    }
+//
+//    private byte[] decryptMessageWithDES(byte[] input) {
+//    }
 
     private static byte[] generateIv(int size) {
         byte[] iv = new byte[size];
