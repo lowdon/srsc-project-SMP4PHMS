@@ -263,7 +263,7 @@ public class MessageEncoder {
 //    private byte[] encryptMessageWithDES(byte[] input) {
 //    }
 
-    public String decrypt(DataInputStream istream) throws IOException {
+    public String decrypt(DataInputStream istream){
         String message = null;
 
         try{
@@ -391,8 +391,6 @@ public class MessageEncoder {
 
         cipher = Cipher.getInstance(confidentiality, PROVIDER);
 
-
-
         // Decifrar
 
         if (ctLength == -1)
@@ -412,32 +410,7 @@ public class MessageEncoder {
         //message integrity verification with hash, will not be used for GCM or other autheticated modes
         int messageLength = -1;
         if( !cMode.equals("GCM") && !cMode.equals("CCM") && !cMode.equals("OCB") ){
-            if(inHashMode) {
-                messageLength = ptLength - hash.getDigestLength();
-                hash.update(plainText, 0, messageLength);
-
-                byte[] messageHash = new byte[hash.getDigestLength()];
-                System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
-
-                byte[] hashDigest = hash.digest();
-                //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
-                System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
-                        MessageDigest.isEqual(hashDigest, messageHash));
-                System.out.println("message with original hash: " + Utils.toHex(messageHash) +
-                        "\ncalculated hash after decryption: " + Utils.toHex(hashDigest));
-            } else { // HMAC mode is enabled
-                messageLength = ptLength - hMac.getMacLength();
-                hMac.init(hMacKey);
-                hMac.update(plainText, 0, messageLength);
-
-                byte[] messageHash = new byte[hMac.getMacLength()];
-                System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
-
-                //THIS WILL PRINT IF HMAC MATCH OR NOT!!!
-                System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nHMACverified: " +
-                        MessageDigest.isEqual(hMac.doFinal(), messageHash));
-                System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal()));
-            }
+            messageLength = getMsgLenAndCheckHashMac(ptLength, plainText, hMacKey);
 
             byte[] messageText = new byte[messageLength];
             System.arraycopy(plainText, 0, messageText, 0, messageLength); // copies messageText from plain to msgText
@@ -451,6 +424,37 @@ public class MessageEncoder {
         plainTextDataStream.close();
 
         return plainTextByteStream.toByteArray();
+    }
+
+    private int getMsgLenAndCheckHashMac(int ptLength, byte[] plainText, Key hMacKey) throws InvalidKeyException {
+        int messageLength;
+        if(inHashMode) {
+            messageLength = ptLength - hash.getDigestLength();
+            hash.update(plainText, 0, messageLength);
+
+            byte[] messageHash = new byte[hash.getDigestLength()];
+            System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+
+            byte[] hashDigest = hash.digest();
+            //THIS WILL PRINT IF HASHES MATCH OR NOT!!!
+            System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nhashverified: " +
+                    MessageDigest.isEqual(hashDigest, messageHash));
+            System.out.println("message with original hash: " + Utils.toHex(messageHash) +
+                    "\ncalculated hash after decryption: " + Utils.toHex(hashDigest));
+        } else { // HMAC mode is enabled
+            messageLength = ptLength - hMac.getMacLength();
+            hMac.init(hMacKey);
+            hMac.update(plainText, 0, messageLength);
+
+            byte[] messageHash = new byte[hMac.getMacLength()];
+            System.arraycopy(plainText, messageLength, messageHash, 0, messageHash.length);
+
+            //THIS WILL PRINT IF HMAC MATCH OR NOT!!!
+            System.out.println("plain : " + Utils.toString(plainText, messageLength) + "\nHMACverified: " +
+                    MessageDigest.isEqual(hMac.doFinal(), messageHash));
+            System.out.println("message with HMAC " + Utils.toHex(hMac.doFinal()));
+        }
+        return messageLength;
     }
 //
 //    private byte[] decryptMessageWithRC4(byte[] input) {
