@@ -14,6 +14,11 @@ import mchat.utils.Utils;
 
 import java.io.*;
 import java.net.*;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.util.Arrays;
 
 public class SecureMulticastChat extends Thread {
 
@@ -48,7 +53,7 @@ public class SecureMulticastChat extends Thread {
 
     protected boolean isActive;
 
-    private final MessageEncoder messageEncoder = new MessageEncoder();
+    private MessageEncoder messageEncoder;
 
     // Multicast Chat-Messaging
     public SecureMulticastChat(String username, InetAddress group, int port,
@@ -58,6 +63,8 @@ public class SecureMulticastChat extends Thread {
         this.group = group;
         this.listener = listener;
         isActive = true;
+
+        messageEncoder = new MessageEncoder(username);
 
         // create & configure multicast socket
 
@@ -97,11 +104,13 @@ public class SecureMulticastChat extends Thread {
     protected void processJoin(DataInputStream istream, InetAddress address,
                                int port) throws IOException {
         int hashLen = istream.readInt();
-        String userHash = Utils.toHex(istream.readNBytes(hashLen));
-
+        byte[] userHash = istream.readNBytes(hashLen);
+        String asymAlg = istream.readUTF();
+        System.out.println("ASYMALG: " + asymAlg);
         try {
-            listener.chatParticipantJoined(userHash, address, port);
-        } catch (Throwable e) {}
+            byte[] pKey = istream.readNBytes(istream.readInt()); // todo will not be used
+            listener.chatParticipantJoined(Utils.toHex(userHash), address, port);
+        } catch (Throwable e) { e.getMessage(); }
     }
 
     // Send LEAVE
@@ -124,9 +133,10 @@ public class SecureMulticastChat extends Thread {
     // Send message to the chat-messaging room
     //
     public void sendMessage(String message) throws IOException {
-        SMP4PHMSPacket sPacket = new SMP4PHMSPacket(
-                new SMP4PHMSHeader(username, MESSAGE, CHAT_MAGIC_NUMBER).getHeaderBytes(),
-                messageEncoder.encrypt(message.getBytes()));
+        SMP4PHMSHeader header = new SMP4PHMSHeader(username, MESSAGE, CHAT_MAGIC_NUMBER, null,
+                null);
+        SMP4PHMSPacket sPacket = new SMP4PHMSPacket( header.getHeaderBytes(),
+                messageEncoder.sign(header.getHeaderBytes(), username.getBytes()), messageEncoder.encrypt(message.getBytes()), true);
         DatagramPacket packet = new DatagramPacket(sPacket.getPacket(), sPacket.getPacket().length, group,
                 msocket.getLocalPort());
         msocket.send(packet);
@@ -139,13 +149,14 @@ public class SecureMulticastChat extends Thread {
                                   InetAddress address,
                                   int port) throws IOException {
         int hashLen = istream.readInt();
-        String userHash = Utils.toHex(istream.readNBytes(hashLen));
-        String message = messageEncoder.decrypt(istream);
-        listener.chatMessageReceived(userHash, address, port, message);
+        byte[] userHash = istream.readNBytes(hashLen);
+        String message = messageEncoder.decrypt(istream.readUTF(), userHash, istream);
+        listener.chatMessageReceived(Utils.toHex(userHash), address, port, message);
     }
 
     private void sendJoinOrLeave(int opCode) throws IOException {
-        SMP4PHMSHeader header = new SMP4PHMSHeader(username, opCode, CHAT_MAGIC_NUMBER);
+        SMP4PHMSHeader header = new SMP4PHMSHeader(username, opCode, CHAT_MAGIC_NUMBER,
+                messageEncoder.getMyPublicKey(), messageEncoder.getAsymmetricAlg());
         DatagramPacket packet = new DatagramPacket(header.getHeaderBytes(), header.getHeaderBytes().length, group,
                 msocket.getLocalPort());
         msocket.send(packet);

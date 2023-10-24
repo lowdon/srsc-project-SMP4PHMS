@@ -3,10 +3,7 @@ package mchat.headers;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.*;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.Security;
+import java.security.*;
 import java.util.Properties;
 
 import static java.lang.Long.parseLong;
@@ -17,13 +14,16 @@ public class SMP4PHMSHeader {
     public static int VERSION;
     // Definition of a MAGIC NUMBER (as a global identifier) for the CHAT
     public static final long CHAT_MAGIC_NUMBER = 4969756929653643804L;
-    public static byte[] HASH_NICKNAME; // = new byte[32]; always
+
+    public static String username;
+    public static byte[] userHash; // = new byte[32]; always
     public static final String PROVIDER = "BC";
     public static byte[] headerBytes;
 
     public static int size;
+    public byte[] pubKeyShareBytes;
 
-    public SMP4PHMSHeader(String nickname, int opCode, long MAGIC_N) {
+    public SMP4PHMSHeader(String nickname, int opCode, long MAGIC_N, byte[] pubKeyShare, String asymAlg) {
         Security.addProvider(new BouncyCastleProvider());
         //conf file setup
         InputStream secConf;
@@ -41,7 +41,8 @@ public class SMP4PHMSHeader {
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
-        HASH_NICKNAME = hash.digest(nickname.getBytes());
+        userHash = hash.digest(nickname.getBytes());
+
 
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         DataOutputStream dataStream = new DataOutputStream(byteStream);
@@ -49,7 +50,15 @@ public class SMP4PHMSHeader {
             dataStream.writeLong(MAGIC_N);
             dataStream.writeInt(opCode);
             dataStream.writeInt(hash.getDigestLength());
-            dataStream.write(HASH_NICKNAME);
+            dataStream.write(userHash);
+            if(opCode == 1) { //on join, share asym keys
+                pubKeyShareBytes = pubKeyShare;
+                dataStream.writeUTF(asymAlg);
+                dataStream.writeInt(pubKeyShare.length);
+                dataStream.write(pubKeyShare);
+            } else if(opCode == 3){
+                dataStream.writeUTF(nickname);
+            }
             dataStream.writeInt(VERSION);
             dataStream.close();
         } catch (IOException e) {
@@ -57,10 +66,15 @@ public class SMP4PHMSHeader {
         }
         headerBytes = byteStream.toByteArray();
         size = headerBytes.length;
+        username = nickname;
     }
 
     public byte[] getHeaderBytes(){
         return headerBytes;
+    }
+
+    public byte[] getUserHash(){
+        return userHash;
     }
 
 
