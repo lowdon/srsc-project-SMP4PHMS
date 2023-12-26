@@ -1,2 +1,2 @@
 # srsc-project-SMP4PHMS
-encrypted chatting program
+SMP4PHMS, a secure chatting tool using Bouncy Castle and JCE. In this project, I developed a module for symmetric and asymmetric encryption and decryption of data with various algorithms and cipher modes, namely AES, with support for GCM, ECB, CCM, CTR and OCB, and ChaCha20. Regarding asymmetric encryption, I chose RSA as the algorithm for implementation. This program also attempts to guarantee integrity of messages through the usage of MACs, also with compatibility with hashing as a means of proof of integrity, and also authenticity, through the use of digital signatures using DSA, in this case, with the user being able to choose most of the settings for the chatting session. 
